@@ -4,6 +4,7 @@ import threading
 import re
 cache={}
 threads=[]
+dspoofurl='www.provence-tomato.com'
 def s2cworker(nsock,connection):
     print "receiving data from server"
     while True:
@@ -94,13 +95,16 @@ def checkcache(remoteaddr,cturl,data):
     finally:
         nsock.close()
         return
-
+blockedhostlist=set([])
+blockeduserlist=set([])
+spoofurllist=set(['www.qq.com'])
 def c2sworker(connection):
     try:
         while True:
             data = connection.recv(65535)   
             if not (data and len(data)):
                 break
+            print repr(data)
             #print "----------send------------"
             #print 'client:  '
             #print repr(data)
@@ -120,6 +124,11 @@ def c2sworker(connection):
             '''
             if remoteaddr:
                 remoteaddr=remoteaddr.group(1)
+                print remoteaddr
+                if remoteaddr in blockedhostlist:
+                    print remoteaddr + 'is blocked!'
+                    break
+
             else:
                 break   
             #print remoteaddr
@@ -148,9 +157,13 @@ def c2sworker(connection):
                     t = threading.Thread(target=checkcache,args=(remoteaddr,cturl,data)) 
                     t.start()
                     continue
-
+            if remoteaddr in spoofurllist:
+                data.replace(remoteaddr,dspoofurl)
+                remoteaddr=dspoofurl
             nsock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+               
             nsaddr = (remoteaddr,80)
+             
             nsock.connect(nsaddr)
             nsock.settimeout(1.5)
             nsock.sendall(data)
@@ -248,15 +261,19 @@ def c2sworker(connection):
      
 
 sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-server_address = ('localhost',16262)
+server_address = ('localhost',16270)
 #print >>sys.stderr, 'starting up on %s port %s' % server_address
 sock.bind(server_address)
 sock.listen(100)
 while True:
     #print  'waiting for a connection'
     connection , client_address =  sock.accept()
+    if client_address[0] in blockeduserlist:
+        connection.close()
+        print client_address[0] + " is forbiddened!"
+        continue
     connection.settimeout(1.5)
-    #print  'connection from',client_address
+    print  'connection from',client_address
     #print "receiving data from client"
     t = threading.Thread(target=c2sworker,args=(connection,)) 
     #threads.append(t)
